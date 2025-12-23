@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <fcntl.h> // open-function
+#include <stdbool.h>
 
 #define MAX_LINE 80
 
@@ -42,34 +44,57 @@ char** parse_arguments(char *string) {
     args[i] = NULL;
     return args;
 }
-/* Executes external commands using fork and execvp. Has option for background execution.
+/* Executes external commands using fork and execvp. Has option for background execution and output redirection.
    Waits for the command to finish 
 */
-
 void execute_command(char **args) {
-    int background;
+    bool background;
     int i = 0;
+    bool redirect_output = false;
+    int j;
+    
+    for(j=0; args[j] != NULL; j++){
+        if (j > 0 && strcmp(args[j - 1], ">") == 0){
+            redirect_output = true;
+            break;
+        }
+    }
 
-    for (i = 0; args[i] != NULL; i++);
+    while (args[i] != NULL) {
+        i++;
+    }
+
     if (i > 0 && strcmp(args[i - 1], "&") == 0) {
-        background = 1;
+        background = true;
         args[i - 1] = NULL;
     } 
     else {
-        background = 0;
+        background = false;
+    }
+    int fd = -1;
+    if (redirect_output == true){
+     fd = open(args[j], O_WRONLY | O_CREAT | O_TRUNC, 0644);
     }
     pid_t pid = fork();
     if (pid < 0) {
-        perror("Fork epäonnistui");
+        perror("Fork failed");
         return;
     }
     if (pid == 0) {
+        if (redirect_output){
+            dup2(fd, STDOUT_FILENO);
+            args[j-1] = NULL;
+            close(fd);
+        }
         execvp(args[0], args);
-        perror("Komentoa ei löytynyt");
+        perror("No such command");
         exit(1);
     } 
     else {
-        if (background == 0) {
+        if (redirect_output){
+            close(fd);
+        }
+        if (background == false) {
             wait(NULL); 
         } else {
             printf("[Process started in background: %d]\n", pid);
@@ -105,7 +130,7 @@ int execute_built_in(char** args){
         }
     if (strcmp(args[0], "cd") == 0) {
         if (args[1] == NULL) {
-            printf("Anna kansio argumenttina (esim. cd ..)\n");
+            printf("include the directory name as a parameter)\n");
         } 
         else {
             if (chdir(args[1]) != 0) {
@@ -116,8 +141,6 @@ int execute_built_in(char** args){
     }
     return 0;
 }
-
-
 
 
 int main(void) {
