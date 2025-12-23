@@ -1,0 +1,2 @@
+"Eka rivi"
+"Toka rivi"

@@ -9,6 +9,13 @@
 
 #define MAX_LINE 80
 
+typedef struct {
+    char **argv;        // Osoitin argumenttilistaan (menee execvp:lle)
+    char *output_file;  // Tiedostonimi (jos uudelleenohjaus) tai NULL
+    bool append_mode;   // true = ">>", false = ">"
+    bool background;    // true = "&"
+} CommandInfo;
+
 /* Reads a line of input from the user into the provided buffer.
    Returns 1 if successful, 0 if end-of-file or error occurs.
 */
@@ -44,57 +51,84 @@ char** parse_arguments(char *string) {
     args[i] = NULL;
     return args;
 }
+
+// Parses command details such as output redirection and background execution, stores the info in CommandInfo struct.
+void parse_command_details(char **args, CommandInfo *cmd) {
+    cmd->argv = args;
+    cmd->output_file = NULL;
+    cmd->append_mode = false;
+    cmd->background = false;
+
+    int i = 0;
+    while (args[i] != NULL) {
+        if (strcmp(args[i], "&") == 0) {
+            if (args[i + 1] == NULL) {
+                cmd->background = true;
+                args[i] = NULL;
+            } else {
+                printf("Syntax error: '&' must be the last argument.\n");
+                args[0] = NULL;
+                return; 
+            }
+        }
+        else if (strcmp(args[i], ">") == 0 || strcmp(args[i], ">>") == 0) {
+            if (strcmp(args[i], ">>") == 0) {
+                cmd->append_mode = true;
+            } else {
+                cmd->append_mode = false;
+            }
+
+            if (args[i + 1] != NULL) {
+                cmd->output_file = args[i + 1];
+                args[i] = NULL;
+                i++;
+            } else {
+                printf("Syntax error: Output file missing after redirection.\n");
+                args[0] = NULL;
+                return;
+            }
+        }
+        i++;
+    }
+}
+
+
 /* Executes external commands using fork and execvp. Has option for background execution and output redirection.
    Waits for the command to finish 
 */
 void execute_command(char **args) {
-    bool background;
-    int i = 0;
-    bool redirect_output = false;
-    int j;
-    
-    for(j=0; args[j] != NULL; j++){
-        if (j > 0 && strcmp(args[j - 1], ">") == 0){
-            redirect_output = true;
-            break;
-        }
+    CommandInfo cmd;
+    parse_command_details(args, &cmd);
+
+    if (cmd.argv[0] == NULL) {
+        return;
     }
 
-    while (args[i] != NULL) {
-        i++;
-    }
-
-    if (i > 0 && strcmp(args[i - 1], "&") == 0) {
-        background = true;
-        args[i - 1] = NULL;
-    } 
-    else {
-        background = false;
-    }
-    int fd = -1;
-    if (redirect_output == true){
-     fd = open(args[j], O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    }
     pid_t pid = fork();
     if (pid < 0) {
         perror("Fork failed");
         return;
     }
+
     if (pid == 0) {
-        if (redirect_output){
+        if (cmd.output_file != NULL) {
+            int flags = O_WRONLY | O_CREAT | (cmd.append_mode ? O_APPEND : O_TRUNC);
+            int fd = open(cmd.output_file, flags, 0644);
+            
+            if (fd < 0) {
+                perror("Failed to open output file");
+                exit(1);
+            }
             dup2(fd, STDOUT_FILENO);
-            args[j-1] = NULL;
             close(fd);
         }
-        execvp(args[0], args);
+        
+        execvp(cmd.argv[0], cmd.argv);
         perror("No such command");
         exit(1);
     } 
     else {
-        if (redirect_output){
-            close(fd);
-        }
-        if (background == false) {
+        if (!cmd.background) {
             wait(NULL); 
         } else {
             printf("[Process started in background: %d]\n", pid);
