@@ -1,0 +1,18 @@
+ls
+whoami
+ls -la
+ls | grep .c
+echo "hello world" | wc -w
+echo "Tämä on testi" > testi_out.txt
+cat testi_out.txt
+echo "Lisää tekstiä" >> testi_out.txt
+cat testi_out.txt
+pwd
+cd ..
+pwd
+ls
+echo "Toista tämä"
+!!
+foobar
+rm testi_out.txt
+exit

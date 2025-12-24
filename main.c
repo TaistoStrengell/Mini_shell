@@ -175,13 +175,87 @@ int execute_built_in(char** args){
     }
     return 0;
 }
+// Executes commands with a single pipe. Returns 1 if a pipe was executed, 0 if pipe not found, -1 on error.
+int execute_pipe(char **args) {
+    int i;
+    int pipefd[2];
+    char **cmd1_args = args;
+    char **cmd2_args = NULL;
+
+    for (i = 0; args[i] != NULL; i++) {
+        if (strcmp(args[i], "|") == 0) {
+            args[i] = NULL;
+            cmd2_args = &args[i+1];
+            break;
+        }
+    }
+
+    if (cmd2_args == NULL) {
+        return 0;
+    }
+
+    if (pipe(pipefd) == -1) {
+        perror("Pipe failed");
+        return -1;
+    }
+
+    //first child process, writer
+    pid_t pid1 = fork();
+    if (pid1 == 0) {
+        close(pipefd[0]);
+        dup2(pipefd[1], STDOUT_FILENO);
+        close(pipefd[1]);
+
+        CommandInfo cmd;
+        parse_command_details(cmd1_args, &cmd);
+        
+        execvp(cmd.argv[0], cmd.argv);
+        perror("execvp failed (child 1)");
+        exit(1);
+    }
+
+    // second child process, reader
+    pid_t pid2 = fork();
+    if (pid2 == 0) {
+        close(pipefd[1]);
+        dup2(pipefd[0], STDIN_FILENO);
+        close(pipefd[0]);
+
+        CommandInfo cmd;
+        parse_command_details(cmd2_args, &cmd);
+
+        
+        if (cmd.output_file != NULL) {
+            int flags = O_WRONLY | O_CREAT | (cmd.append_mode ? O_APPEND : O_TRUNC);
+            int fd = open(cmd.output_file, flags, 0644);
+            if (fd < 0) {
+                perror("Open failed");
+                exit(1);
+            }
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+        }
+
+        execvp(cmd.argv[0], cmd.argv);
+        perror("execvp failed (child 2)");
+        exit(1);
+    }
+    
+
+    close(pipefd[0]);
+    close(pipefd[1]);
+    waitpid(pid1, NULL, 0);
+    waitpid(pid2, NULL, 0);
+
+    return 1;
+}
 
 
 int main(void) {
     char input[MAX_LINE];
     char last_command[MAX_LINE] = "";
 
-    //mainloop, reads, parses and executes commands
+    // Mainloop: reads, parses and executes commands
     while (1) {
         printf("osh>");
         fflush(stdout);
@@ -189,7 +263,7 @@ int main(void) {
         if (!read_input(input)) break; 
         if (input[0] == '\0') continue;
 
-        //checks for "!!" command
+        // Checks for "!!" command
         if (!handle_history(input, last_command)) {
             continue; 
         }
@@ -200,18 +274,25 @@ int main(void) {
             free(args);
             continue;
         }
-        //checks if command is built-in or included in the linux operating system
+
+        // Checks if command is built-in
         int built_in_status = execute_built_in(args);
+        
         if (built_in_status == 2) {
             free(args);
-            break;
-        } else if (built_in_status == 0) {
-            execute_command(args);
+            break; // Exit command
+        } 
+        else if (built_in_status == 0) {
+            // First try to execute as a pipe. If no pipe found (returns 0),
+            // execute as a standard command with potential redirection.
+            if (execute_pipe(args) == 0) {
+                execute_command(args);
+            }
         }
+        
         free(args);
     }
     return 0;
-    
 }
 
 
