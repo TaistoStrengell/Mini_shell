@@ -129,7 +129,7 @@ void execute_command(char **args) {
     } 
     else {
         if (!cmd.background) {
-            wait(NULL); 
+            waitpid(pid, NULL, 0); 
         } else {
             printf("[Process started in background: %d]\n", pid);
         }
