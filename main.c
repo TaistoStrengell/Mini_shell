@@ -1,19 +1,21 @@
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
-#include <fcntl.h> // open-function
+#include <fcntl.h>
 #include <stdbool.h>
+#include <signal.h>
 
 #define MAX_LINE 80
 
 typedef struct {
-    char **argv;        // Osoitin argumenttilistaan (menee execvp:lle)
-    char *output_file;  // Tiedostonimi (jos uudelleenohjaus) tai NULL
-    bool append_mode;   // true = ">>", false = ">"
-    bool background;    // true = "&"
+    char **argv;
+    char *output_file;
+    bool append_mode;
+    bool background;
 } CommandInfo;
 
 /* Reads a line of input from the user into the provided buffer.
@@ -50,6 +52,13 @@ char** parse_arguments(char *string) {
     }
     args[i] = NULL;
     return args;
+}
+/*
+   kills zombieprocesses in the background
+*/
+void handle_sigchld(int sig) {
+    (void)sig;
+    while (waitpid(-1, NULL, WNOHANG) > 0);
 }
 
 // Parses command details such as output redirection and background execution, stores the info in CommandInfo struct.
@@ -254,6 +263,17 @@ int execute_pipe(char **args) {
 int main(void) {
     char input[MAX_LINE];
     char last_command[MAX_LINE] = "";
+
+    // Setup signal handler for cleaning up zombie processesS
+    struct sigaction sa;
+    sa.sa_handler = &handle_sigchld;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    
+    if (sigaction(SIGCHLD, &sa, 0) == -1) {
+        perror("Sigaction failed");
+        exit(1);
+    }
 
     // Mainloop: reads, parses and executes commands
     while (1) {
