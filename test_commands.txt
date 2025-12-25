@@ -1,18 +1,40 @@
-ls
+echo System Information
+uname -s
 whoami
-ls -la
-ls | grep .c
-echo "hello world" | wc -w
-echo "Tämä on testi" > testi_out.txt
-cat testi_out.txt
-echo "Lisää tekstiä" >> testi_out.txt
-cat testi_out.txt
+date
+
+echo Pipe functionality
+ls -F | grep /
+cat main.c | grep include
+ls -l | wc -l
+
+echo Redirection
+echo Log entry start > test_log.txt
+cat test_log.txt
+echo Log entry append >> test_log.txt
+cat test_log.txt
+
+echo Background execution
+sleep 2 &
+echo This text should appear immediately
+ps
+
+echo Directory navigation
+pwd
+mkdir test_dir
+cd test_dir
 pwd
 cd ..
+rmdir test_dir
 pwd
-ls
-echo "Toista tämä"
+
+echo History functionality
+echo Repeat this line
 !!
-foobar
-rm testi_out.txt
+
+echo Error handling
+non_existent_command
+
+echo Cleanup and Exit
+rm test_log.txt
 exit

@@ -54,7 +54,7 @@ char** parse_arguments(char *string) {
     return args;
 }
 /*
-   kills zombieprocesses in the background
+   kills zombie processes in the background
 */
 void handle_sigchld(int sig) {
     (void)sig;
